@@ -1,0 +1,27 @@
+services:
+  inventory-service:
+    build: ./services/inventory-service
+    ports:
+      - "8082:8082"
+    environment:
+      PORT: "8082"
+
+  payment-service:
+    build: ./services/payment-service
+    ports:
+      - "8083:8083"
+    environment:
+      PORT: "8083"
+      FAILURE_RATE: "0.1"
+
+  order-service:
+    build: ./services/order-service
+    ports:
+      - "8084:8084"
+    environment:
+      PORT: "8084"
+      INVENTORY_SERVICE_URL: "http://inventory-service:8082"
+      PAYMENT_SERVICE_URL: "http://payment-service:8083"
+    depends_on:
+      - inventory-service
+      - payment-service
