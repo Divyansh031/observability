@@ -5,8 +5,11 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"order-service/internal/client"
 	"order-service/internal/handler"
+	"order-service/internal/metrics"
 	"order-service/internal/store"
 )
 
@@ -31,11 +34,13 @@ func main() {
 	inventoryClient := client.NewInventoryClient(inventoryURL)
 	paymentClient := client.NewPaymentClient(paymentURL)
 	h := handler.NewOrderHandler(orderStore, inventoryClient, paymentClient, log)
+	mw := metrics.New()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handler.Healthz)
-	mux.HandleFunc("POST /orders", h.Create)
-	mux.HandleFunc("GET /orders/{id}", h.Get)
+	mux.Handle("GET /metrics", promhttp.Handler())
+	mux.HandleFunc("POST /orders", mw.Wrap("/orders", h.Create))
+	mux.HandleFunc("GET /orders/{id}", mw.Wrap("/orders/{id}", h.Get))
 
 	log.Info("order-service starting", "port", port, "inventory_url", inventoryURL, "payment_url", paymentURL)
 	if err := http.ListenAndServe(":"+port, mux); err != nil {

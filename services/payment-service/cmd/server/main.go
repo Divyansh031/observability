@@ -6,7 +6,10 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"payment-service/internal/handler"
+	"payment-service/internal/metrics"
 )
 
 func main() {
@@ -25,10 +28,12 @@ func main() {
 	}
 
 	h := handler.NewPaymentHandler(log, failureRate)
+	mw := metrics.New()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handler.Healthz)
-	mux.HandleFunc("POST /payments", h.Charge)
+	mux.Handle("GET /metrics", promhttp.Handler())
+	mux.HandleFunc("POST /payments", mw.Wrap("/payments", h.Charge))
 
 	log.Info("payment-service starting", "port", port, "failure_rate", failureRate)
 	if err := http.ListenAndServe(":"+port, mux); err != nil {
