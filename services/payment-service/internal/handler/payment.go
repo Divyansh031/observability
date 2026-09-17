@@ -6,18 +6,21 @@ import (
 	"math/rand"
 	"net/http"
 	"time"
+
+	"payment-service/internal/metrics"
 )
 
 type PaymentHandler struct {
-	log *slog.Logger
+	log     *slog.Logger
+	metrics *metrics.PaymentMetrics
 	// failureRate is the probability (0.0-1.0) that a charge is declined.
 	// A knob now, an env var later — this is what we'll turn up on the
 	// chaos-testing day to prove our alerts actually fire.
 	failureRate float64
 }
 
-func NewPaymentHandler(log *slog.Logger, failureRate float64) *PaymentHandler {
-	return &PaymentHandler{log: log, failureRate: failureRate}
+func NewPaymentHandler(log *slog.Logger, m *metrics.PaymentMetrics, failureRate float64) *PaymentHandler {
+	return &PaymentHandler{log: log, metrics: m, failureRate: failureRate}
 }
 
 type chargeRequest struct {
@@ -55,11 +58,13 @@ func (h *PaymentHandler) Charge(w http.ResponseWriter, r *http.Request) {
 	time.Sleep(time.Duration(20+rand.Intn(100)) * time.Millisecond)
 
 	if rand.Float64() < h.failureRate {
+		h.metrics.TransactionsTotal.WithLabelValues("declined").Inc()
 		h.log.Warn("payment declined", "order_id", req.OrderID)
 		writeJSON(w, http.StatusPaymentRequired, errorResponse{Error: "payment declined"})
 		return
 	}
 
+	h.metrics.TransactionsTotal.WithLabelValues("charged").Inc()
 	writeJSON(w, http.StatusOK, chargeResponse{
 		Status:        "charged",
 		TransactionID: "txn_" + req.OrderID,

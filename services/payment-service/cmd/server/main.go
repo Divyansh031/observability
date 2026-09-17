@@ -27,7 +27,8 @@ func main() {
 		}
 	}
 
-	h := handler.NewPaymentHandler(log, failureRate)
+	bizMetrics := metrics.NewPaymentMetrics()
+	h := handler.NewPaymentHandler(log, bizMetrics, failureRate)
 	mw := metrics.New()
 
 	mux := http.NewServeMux()

@@ -21,7 +21,11 @@ func main() {
 	}
 
 	invStore := store.NewInventoryStore()
-	h := handler.NewInventoryHandler(invStore, log)
+	bizMetrics := metrics.NewInventoryMetrics()
+	for sku, qty := range invStore.All() {
+		bizMetrics.StockLevel.WithLabelValues(sku).Set(float64(qty))
+	}
+	h := handler.NewInventoryHandler(invStore, bizMetrics, log)
 	mw := metrics.New()
 
 	mux := http.NewServeMux()

@@ -37,18 +37,33 @@ func (s *InventoryStore) Get(sku string) (int, error) {
 	return qty, nil
 }
 
-// Reserve decrements stock for sku by qty if enough is available.
-func (s *InventoryStore) Reserve(sku string, qty int) error {
+// Reserve decrements stock for sku by qty if enough is available, returning
+// the remaining quantity so callers can update a metric without a second
+// locked lookup (which would otherwise race against a concurrent reservation).
+func (s *InventoryStore) Reserve(sku string, qty int) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	current, ok := s.stock[sku]
 	if !ok {
-		return ErrSKUNotFound
+		return 0, ErrSKUNotFound
 	}
 	if current < qty {
-		return ErrOutOfStock
+		return current, ErrOutOfStock
 	}
 	s.stock[sku] = current - qty
-	return nil
+	return s.stock[sku], nil
+}
+
+// All returns a snapshot of every SKU's current stock, used to seed the
+// stock-level gauge at startup.
+func (s *InventoryStore) All() map[string]int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	snapshot := make(map[string]int, len(s.stock))
+	for sku, qty := range s.stock {
+		snapshot[sku] = qty
+	}
+	return snapshot
 }

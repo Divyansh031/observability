@@ -6,16 +6,18 @@ import (
 	"log/slog"
 	"net/http"
 
+	"inventory-service/internal/metrics"
 	"inventory-service/internal/store"
 )
 
 type InventoryHandler struct {
-	store *store.InventoryStore
-	log   *slog.Logger
+	store   *store.InventoryStore
+	metrics *metrics.InventoryMetrics
+	log     *slog.Logger
 }
 
-func NewInventoryHandler(s *store.InventoryStore, log *slog.Logger) *InventoryHandler {
-	return &InventoryHandler{store: s, log: log}
+func NewInventoryHandler(s *store.InventoryStore, m *metrics.InventoryMetrics, log *slog.Logger) *InventoryHandler {
+	return &InventoryHandler{store: s, metrics: m, log: log}
 }
 
 type stockResponse struct {
@@ -66,13 +68,17 @@ func (h *InventoryHandler) Reserve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.store.Reserve(req.SKU, req.Qty)
+	remaining, err := h.store.Reserve(req.SKU, req.Qty)
 	switch {
 	case err == nil:
+		h.metrics.ReservationsTotal.WithLabelValues("reserved").Inc()
+		h.metrics.StockLevel.WithLabelValues(req.SKU).Set(float64(remaining))
 		writeJSON(w, http.StatusOK, map[string]string{"status": "reserved"})
 	case errors.Is(err, store.ErrSKUNotFound):
+		h.metrics.ReservationsTotal.WithLabelValues("not_found").Inc()
 		writeJSON(w, http.StatusNotFound, errorResponse{Error: "sku not found"})
 	case errors.Is(err, store.ErrOutOfStock):
+		h.metrics.ReservationsTotal.WithLabelValues("out_of_stock").Inc()
 		writeJSON(w, http.StatusConflict, errorResponse{Error: "out of stock"})
 	default:
 		h.log.Error("reserve failed", "sku", req.SKU, "err", err)

@@ -33,7 +33,8 @@ func main() {
 	orderStore := store.NewOrderStore()
 	inventoryClient := client.NewInventoryClient(inventoryURL)
 	paymentClient := client.NewPaymentClient(paymentURL)
-	h := handler.NewOrderHandler(orderStore, inventoryClient, paymentClient, log)
+	bizMetrics := metrics.NewOrderMetrics()
+	h := handler.NewOrderHandler(orderStore, inventoryClient, paymentClient, bizMetrics, log)
 	mw := metrics.New()
 
 	mux := http.NewServeMux()

@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"order-service/internal/client"
+	"order-service/internal/metrics"
 	"order-service/internal/store"
 )
 
@@ -14,11 +15,12 @@ type OrderHandler struct {
 	orders    *store.OrderStore
 	inventory *client.InventoryClient
 	payment   *client.PaymentClient
+	metrics   *metrics.OrderMetrics
 	log       *slog.Logger
 }
 
-func NewOrderHandler(orders *store.OrderStore, inv *client.InventoryClient, pay *client.PaymentClient, log *slog.Logger) *OrderHandler {
-	return &OrderHandler{orders: orders, inventory: inv, payment: pay, log: log}
+func NewOrderHandler(orders *store.OrderStore, inv *client.InventoryClient, pay *client.PaymentClient, m *metrics.OrderMetrics, log *slog.Logger) *OrderHandler {
+	return &OrderHandler{orders: orders, inventory: inv, payment: pay, metrics: m, log: log}
 }
 
 type createOrderRequest struct {
@@ -59,10 +61,13 @@ func (h *OrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if err := h.inventory.Reserve(req.SKU, req.Qty); err != nil {
 		switch {
 		case errors.Is(err, client.ErrOutOfStock):
+			h.metrics.OrdersTotal.WithLabelValues("out_of_stock").Inc()
 			writeJSON(w, http.StatusConflict, errorResponse{Error: "out of stock"})
 		case errors.Is(err, client.ErrSKUNotFound):
+			h.metrics.OrdersTotal.WithLabelValues("sku_not_found").Inc()
 			writeJSON(w, http.StatusNotFound, errorResponse{Error: "sku not found"})
 		default:
+			h.metrics.OrdersTotal.WithLabelValues("inventory_unavailable").Inc()
 			h.log.Error("inventory reservation failed", "sku", req.SKU, "err", err)
 			writeJSON(w, http.StatusBadGateway, errorResponse{Error: "inventory service unavailable"})
 		}
@@ -79,9 +84,15 @@ func (h *OrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 	txnID, err := h.payment.Charge(order.ID, req.Amount)
 	if err != nil {
 		if errors.Is(err, client.ErrPaymentDeclined) {
+			h.metrics.OrdersTotal.WithLabelValues("payment_declined").Inc()
+			order.Status = "payment_declined"
+			h.orders.Update(order)
 			writeJSON(w, http.StatusPaymentRequired, errorResponse{Error: "payment declined"})
 			return
 		}
+		h.metrics.OrdersTotal.WithLabelValues("payment_unavailable").Inc()
+		order.Status = "payment_unavailable"
+		h.orders.Update(order)
 		h.log.Error("payment charge failed", "order_id", order.ID, "err", err)
 		writeJSON(w, http.StatusBadGateway, errorResponse{Error: "payment service unavailable"})
 		return
@@ -91,6 +102,7 @@ func (h *OrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 	order.TransactionID = txnID
 	h.orders.Update(order)
 
+	h.metrics.OrdersTotal.WithLabelValues("confirmed").Inc()
 	writeJSON(w, http.StatusCreated, order)
 }
 
