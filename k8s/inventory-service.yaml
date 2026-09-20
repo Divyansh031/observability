@@ -52,9 +52,12 @@ kind: Service
 metadata:
   name: inventory-service
   namespace: observability
+  labels:
+    app: inventory-service
 spec:
   selector:
     app: inventory-service
   ports:
-    - port: 8082
+    - name: http
+      port: 8082
       targetPort: 8082
