@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: observability
+
+resources:
+  - servicemonitors.yaml
+
+# Generates the dashboard ConfigMap from the raw JSON at apply time, so the
+# JSON file is the ONLY place the dashboard content is ever hand-edited --
+# no second copy to let go stale.
+configMapGenerator:
+  - name: grafana-dashboard-red-metrics
+    files:
+      - service-red-metrics.json=dashboards/service-red-metrics.json
+    options:
+      # kustomize normally appends a content-hash suffix to generated
+      # ConfigMap names (e.g. -a1b2c3), so tools that reference it by
+      # name get a new object on every change. We don't need that here --
+      # Grafana's sidecar discovers dashboards by watching for the label,
+      # not by a fixed name reference -- and a stable name means
+      # `kubectl apply -k` just updates it in place like our other
+      # manifests, instead of leaving old-named ConfigMaps behind.
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
