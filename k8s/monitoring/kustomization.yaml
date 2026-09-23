@@ -10,9 +10,11 @@ resources:
 # JSON file is the ONLY place the dashboard content is ever hand-edited --
 # no second copy to let go stale.
 configMapGenerator:
-  - name: grafana-dashboard-red-metrics
+  - name: grafana-dashboards
     files:
       - service-red-metrics.json=dashboards/service-red-metrics.json
+      - service-detail.json=dashboards/service-detail.json
+      - business-metrics.json=dashboards/business-metrics.json
     options:
       # kustomize normally appends a content-hash suffix to generated
       # ConfigMap names (e.g. -a1b2c3), so tools that reference it by
