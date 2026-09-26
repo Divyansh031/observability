@@ -5,6 +5,7 @@ namespace: observability
 
 resources:
   - servicemonitors.yaml
+  - alerts.yaml
 
 # Generates the dashboard ConfigMap from the raw JSON at apply time, so the
 # JSON file is the ONLY place the dashboard content is ever hand-edited --

@@ -12,6 +12,18 @@ import (
 	"payment-service/internal/metrics"
 )
 
+func envInt(key string, def int) int {
+	v := os.Getenv(key)
+	if v == "" {
+		return def
+	}
+	parsed, err := strconv.Atoi(v)
+	if err != nil {
+		return def
+	}
+	return parsed
+}
+
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
@@ -27,8 +39,11 @@ func main() {
 		}
 	}
 
+	latencyMinMs := envInt("LATENCY_MIN_MS", 20)
+	latencyMaxMs := envInt("LATENCY_MAX_MS", 120)
+
 	bizMetrics := metrics.NewPaymentMetrics()
-	h := handler.NewPaymentHandler(log, bizMetrics, failureRate)
+	h := handler.NewPaymentHandler(log, bizMetrics, failureRate, latencyMinMs, latencyMaxMs)
 	mw := metrics.New()
 
 	mux := http.NewServeMux()

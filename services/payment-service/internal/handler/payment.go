@@ -17,10 +17,15 @@ type PaymentHandler struct {
 	// A knob now, an env var later — this is what we'll turn up on the
 	// chaos-testing day to prove our alerts actually fire.
 	failureRate float64
+	// latencyMinMs/latencyMaxMs bound the simulated gateway delay. Also a
+	// knob, for the same reason:a way to trigger the p99
+	// latency alert on demand.
+	latencyMinMs int
+	latencyMaxMs int
 }
 
-func NewPaymentHandler(log *slog.Logger, m *metrics.PaymentMetrics, failureRate float64) *PaymentHandler {
-	return &PaymentHandler{log: log, metrics: m, failureRate: failureRate}
+func NewPaymentHandler(log *slog.Logger, m *metrics.PaymentMetrics, failureRate float64, latencyMinMs, latencyMaxMs int) *PaymentHandler {
+	return &PaymentHandler{log: log, metrics: m, failureRate: failureRate, latencyMinMs: latencyMinMs, latencyMaxMs: latencyMaxMs}
 }
 
 type chargeRequest struct {
@@ -54,8 +59,8 @@ func (h *PaymentHandler) Charge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Simulate a real payment gateway's variable latency (20-120ms).
-	time.Sleep(time.Duration(20+rand.Intn(100)) * time.Millisecond)
+	// Simulate a real payment gateway's variable latency.
+	time.Sleep(time.Duration(h.latencyMinMs+rand.Intn(h.latencyMaxMs-h.latencyMinMs+1)) * time.Millisecond)
 
 	if rand.Float64() < h.failureRate {
 		h.metrics.TransactionsTotal.WithLabelValues("declined").Inc()

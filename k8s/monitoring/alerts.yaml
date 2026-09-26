@@ -1,0 +1,81 @@
+# PrometheusRule is the CRD Prometheus Operator watches for alert
+# definitions. Same deal as ServiceMonitor: it's ignored unless labeled
+# `release: kube-prometheus-stack`, confirmed via
+# `kubectl get prometheus -o jsonpath='{.spec.ruleSelector}'` rather than
+# assumed.
+#
+# Note: pod-crash-looping is deliberately NOT defined here — the chart
+# already ships `KubePodCrashLooping` (in kube-prometheus-stack-kubernetes-apps)
+# and it already covers every namespace including ours. Writing our own
+# would just be a second alert firing for the same condition.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: app-services
+  namespace: observability
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: app-services
+      rules:
+        - alert: ServiceDown
+          # `up` is a metric Prometheus creates automatically for every
+          # scrape target -- 1 if the last scrape succeeded, 0 if it
+          # didn't. No app code needed for this one.
+          #
+          # IMPORTANT LIMITATION, found by testing this alert rather than
+          # just writing it: this only fires when a target EXISTS but
+          # scraping it fails (crashed process still occupying the pod,
+          # network issue, port not listening). It will NOT fire if a
+          # Deployment has zero replicas -- Kubernetes removes the pod from
+          # the Service's endpoints the moment there are no pods, so there's
+          # no target left for Prometheus to mark down. That case is what
+          # DeploymentReplicasUnavailable below is for.
+          expr: up{job=~"inventory-service|payment-service|order-service"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.job }} is down"
+            description: "Prometheus has not been able to scrape {{ $labels.job }} for at least 1 minute."
+
+        - alert: DeploymentReplicasUnavailable
+          # kube_deployment_status_replicas_available comes from
+          # kube-state-metrics, which watches the Kubernetes API directly --
+          # not from scraping our app at all. That's exactly why it catches
+          # what ServiceDown structurally cannot: zero replicas means zero
+          # scrape targets, so `up` has nothing to be 0 ON.
+          expr: kube_deployment_status_replicas_available{namespace="observability", deployment=~"inventory-service|payment-service|order-service"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.deployment }} has zero available replicas"
+            description: "Deployment {{ $labels.deployment }} in {{ $labels.namespace }} has had 0 available replicas for at least 1 minute."
+
+        - alert: HighErrorRate
+          # Only 5xx counts, same reasoning as the dashboards: 4xx codes
+          # (payment declined, out of stock, sku not found) are valid
+          # business outcomes, not system failures.
+          expr: |
+            100 * sum by (job) (rate(http_requests_total{job=~"inventory-service|payment-service|order-service", status=~"5.."}[5m]))
+            / sum by (job) (rate(http_requests_total{job=~"inventory-service|payment-service|order-service"}[5m]))
+            > 5
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.job }} error rate above 5%"
+            description: "{{ $labels.job }} has returned 5xx responses for more than 5% of requests over the last 5 minutes (currently {{ $value | printf \"%.1f\" }}%)."
+
+        - alert: HighLatencyP99
+          expr: |
+            histogram_quantile(0.99, sum by (job, le) (rate(http_request_duration_seconds_bucket{job=~"inventory-service|payment-service|order-service"}[5m])))
+            > 0.5
+          for: 3m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.job }} p99 latency above 500ms"
+            description: "{{ $labels.job }} p99 request latency has been above 500ms for at least 3 minutes (currently {{ $value | printf \"%.3f\" }}s)."

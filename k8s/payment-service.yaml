@@ -26,6 +26,10 @@ spec:
               value: "8083"
             - name: FAILURE_RATE
               value: "0.1"
+            - name: LATENCY_MIN_MS
+              value: "20"
+            - name: LATENCY_MAX_MS
+              value: "120"
           resources:
             requests:
               cpu: 50m
