@@ -1,0 +1,20 @@
+# Passed to `helm install kube-prometheus-stack` via -f. Overrides only
+# Grafana's database config; everything else keeps the chart's defaults.
+grafana:
+  grafana.ini:
+    database:
+      type: postgres
+      host: grafana-postgres.monitoring.svc.cluster.local:5432
+      name: grafana
+      user: grafana
+      # password deliberately NOT here -- grafana.ini is rendered into a
+      # plain ConfigMap (readable by anyone who can `kubectl get cm`), so
+      # the password comes in via an env var sourced from the Secret
+      # instead (see envValueFrom below). GF_DATABASE_PASSWORD is Grafana's
+      # standard env-var override for database.password -- any GF_<SECTION>_<KEY>
+      # env var overrides the matching grafana.ini setting.
+  envValueFrom:
+    GF_DATABASE_PASSWORD:
+      secretKeyRef:
+        name: grafana-postgres-credentials
+        key: password

@@ -1,0 +1,111 @@
+# Backing store for Grafana's OWN internal state (dashboards created by
+# hand in the UI, users, alerting state, etc.) -- separate concern from our
+# 3 dashboards, which already persist as code via the ConfigMap generator
+# in kustomization.yaml regardless of whether Postgres exists at all.
+#
+# KNOWN LIMITATION, worth being honest about: this Postgres's PVC is
+# backed by kind's default StorageClass, which stores data on the kind
+# NODE's own disk -- i.e. inside the same disposable Docker container as
+# everything else. It survives a Grafana pod restart/reschedule while the
+# cluster is running, but NOT `kind delete cluster`. Real persistence
+# across cluster deletion would require Postgres running outside kind
+# entirely (e.g. a plain Docker container on the host). We chose this
+# version deliberately, to learn the Grafana<->external-DB wiring itself.
+#
+# Also a known simplification: the DB password below is a plain hardcoded
+# value in a checked-in Secret manifest. Fine for disposable local
+# learning infra; a real deployment would generate this at install time
+# (or pull it from a proper secrets manager) rather than commit it to git.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-postgres-credentials
+  namespace: monitoring
+type: Opaque
+stringData:
+  password: "grafana-dev-only-password"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-postgres-data
+  namespace: monitoring
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana-postgres
+  namespace: monitoring
+  labels:
+    app: grafana-postgres
+spec:
+  # A database is exactly the case where more than 1 replica is actively
+  # dangerous, not just wasteful -- two Postgres processes writing to the
+  # same data files would corrupt it. Real HA Postgres needs actual
+  # replication, not just scaling a Deployment.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: grafana-postgres
+  template:
+    metadata:
+      labels:
+        app: grafana-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: grafana
+            - name: POSTGRES_USER
+              value: grafana
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-postgres-credentials
+                  key: password
+            # Avoids a known issue where some volume backends pre-populate
+            # the mount point (e.g. with lost+found), which the postgres
+            # image's init step refuses to initialize into directly.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "grafana"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "grafana"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: grafana-postgres-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-postgres
+  namespace: monitoring
+spec:
+  selector:
+    app: grafana-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432

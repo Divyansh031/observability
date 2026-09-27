@@ -28,12 +28,20 @@ kubectl apply -f "$SCRIPT_DIR"
 echo "==> Waiting for app pods to be ready"
 kubectl -n observability wait --for=condition=Ready pod --all --timeout=120s
 
+echo "==> Creating monitoring namespace and Grafana's Postgres backing store"
+kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -f "$SCRIPT_DIR/monitoring/postgres.yaml"
+
+echo "==> Waiting for Postgres to be ready (Grafana must not start before this exists)"
+kubectl -n monitoring wait --for=condition=Ready pod -l app=grafana-postgres --timeout=120s
+
 echo "==> Installing kube-prometheus-stack (Prometheus + Grafana + Alertmanager)"
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts >/dev/null 2>&1 || true
 helm repo update >/dev/null
 helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
   --namespace monitoring --create-namespace \
-  --wait --timeout 5m
+  -f "$SCRIPT_DIR/monitoring/grafana-db-values.yaml" \
+  --wait --timeout 8m
 
 echo "==> Applying ServiceMonitors and dashboards"
 kubectl apply -k "$SCRIPT_DIR/monitoring/"
