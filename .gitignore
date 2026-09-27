@@ -1,2 +1,5 @@
+# Compiled binaries that `go build` can leave in a module root when the
+# build pattern resolves to a single main package (see alert-receiver).
+/services/*/server
 go.work
 go.work.sum

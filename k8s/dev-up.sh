@@ -17,9 +17,10 @@ echo "==> Building service images"
 docker build -t inventory-service:dev "$REPO_ROOT/services/inventory-service"
 docker build -t payment-service:dev "$REPO_ROOT/services/payment-service"
 docker build -t order-service:dev "$REPO_ROOT/services/order-service"
+docker build -t alert-receiver:dev "$REPO_ROOT/services/alert-receiver"
 
 echo "==> Loading images into kind"
-kind load docker-image inventory-service:dev payment-service:dev order-service:dev --name "$CLUSTER"
+kind load docker-image inventory-service:dev payment-service:dev order-service:dev alert-receiver:dev --name "$CLUSTER"
 
 echo "==> Applying app manifests"
 kubectl apply -f "$SCRIPT_DIR"

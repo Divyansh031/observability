@@ -1,0 +1,27 @@
+# AlertmanagerConfig -- unlike ServiceMonitor/PrometheusRule, this one needs
+# NO special label (checked via `kubectl get alertmanager -o jsonpath=
+# '{.spec.alertmanagerConfigSelector}'` -- both it and the namespace
+# selector are wide open: {}).
+#
+# This object doesn't replace Alertmanager's global config -- it gets
+# merged in as an additional sub-route under the root route. Every alert
+# whose `namespace` label is "observability" (all 4 of ours are, since
+# that's where our app/targets live) gets routed to our webhook instead of
+# falling through to the chart's default 'null' receiver.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: app-alerts
+  namespace: observability
+spec:
+  route:
+    receiver: alert-receiver-webhook
+    groupBy: ["alertname"]
+    groupWait: 10s
+    groupInterval: 1m
+    repeatInterval: 12h
+  receivers:
+    - name: alert-receiver-webhook
+      webhookConfigs:
+        - url: "http://alert-receiver.observability.svc.cluster.local:8090/webhook"
+          sendResolved: true
