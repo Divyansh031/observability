@@ -6,8 +6,14 @@
 # This object doesn't replace Alertmanager's global config -- it gets
 # merged in as an additional sub-route under the root route. Every alert
 # whose `namespace` label is "observability" (all 4 of ours are, since
-# that's where our app/targets live) gets routed to our webhook instead of
+# that's where our app/targets live) gets routed to Slack instead of
 # falling through to the chart's default 'null' receiver.
+#
+# slackConfigs.apiURL must reference a Secret in THIS SAME namespace
+# (observability) -- confirmed via `kubectl explain
+# alertmanagerconfig.spec.receivers.slackConfigs.apiURL`. Create it with:
+#   kubectl -n observability create secret generic slack-webhook-credentials \
+#     --from-literal=url='<your incoming webhook URL>'
 apiVersion: monitoring.coreos.com/v1alpha1
 kind: AlertmanagerConfig
 metadata:
@@ -15,13 +21,20 @@ metadata:
   namespace: observability
 spec:
   route:
-    receiver: alert-receiver-webhook
+    receiver: slack
     groupBy: ["alertname"]
     groupWait: 10s
     groupInterval: 1m
     repeatInterval: 12h
   receivers:
-    - name: alert-receiver-webhook
-      webhookConfigs:
-        - url: "http://alert-receiver.observability.svc.cluster.local:8090/webhook"
+    - name: slack
+      slackConfigs:
+        - apiURL:
+            name: slack-webhook-credentials
+            key: url
+          # .Status is "firing" or "resolved" -- without checking it, the
+          # message text is identical either way (the bug we just hit).
+          title: '{{ if eq .Status "firing" }}:red_circle: FIRING{{ else }}:white_check_mark: RESOLVED{{ end }}: {{ .CommonLabels.alertname }}'
+          text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ "\n" }}{{ end }}'
+          color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
           sendResolved: true

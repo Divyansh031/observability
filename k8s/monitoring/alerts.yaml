@@ -1,8 +1,6 @@
 # PrometheusRule is the CRD Prometheus Operator watches for alert
 # definitions. Same deal as ServiceMonitor: it's ignored unless labeled
-# `release: kube-prometheus-stack`, confirmed via
-# `kubectl get prometheus -o jsonpath='{.spec.ruleSelector}'` rather than
-# assumed.
+# `release: kube-prometheus-stack`
 #
 # Note: pod-crash-looping is deliberately NOT defined here — the chart
 # already ships `KubePodCrashLooping` (in kube-prometheus-stack-kubernetes-apps)
