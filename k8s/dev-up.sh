@@ -45,4 +45,13 @@ helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
 echo "==> Applying ServiceMonitors and dashboards"
 kubectl apply -k "$SCRIPT_DIR/monitoring/"
 
+echo "==> Installing Loki (single-binary, filesystem storage) + Promtail"
+helm repo add grafana https://grafana.github.io/helm-charts >/dev/null 2>&1 || true
+helm repo update >/dev/null
+helm install loki grafana/loki --version 7.3.0 -n monitoring \
+  -f "$SCRIPT_DIR/monitoring/loki-values.yaml" --wait --timeout 5m
+helm install promtail grafana/promtail --version 6.17.1 -n monitoring \
+  -f "$SCRIPT_DIR/monitoring/promtail-values.yaml" --wait --timeout 3m
+kubectl apply -f "$SCRIPT_DIR/monitoring/loki-datasource.yaml"
+
 echo "==> Done. Cluster '$CLUSTER' is up, app + monitoring stack ready."

@@ -1,0 +1,23 @@
+# Applied directly via `kubectl apply -f`, NOT through kustomization.yaml --
+# that kustomization sets a top-level `namespace: observability` which would
+# override this ConfigMap's namespace. This one must live in `monitoring`:
+# the datasources sidecar (unlike the dashboards one) has no NAMESPACE=ALL
+# override, so it only watches its own namespace (confirmed by checking its
+# env vars directly -- no NAMESPACE var was set at all).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-loki-datasource
+  namespace: monitoring
+  labels:
+    grafana_datasource: "1"
+data:
+  loki-datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Loki
+        uid: loki
+        type: loki
+        access: proxy
+        url: http://loki.monitoring.svc.cluster.local:3100
+        isDefault: false

@@ -1,6 +1,8 @@
 # Passed to `helm install kube-prometheus-stack` via -f. Overrides only
 # Grafana's database config; everything else keeps the chart's defaults.
 grafana:
+  adminUser: admin
+  adminPassword: admin-dev-only-password
   grafana.ini:
     database:
       type: postgres

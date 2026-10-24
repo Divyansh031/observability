@@ -166,6 +166,36 @@
           "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"$service\"}[$__rate_interval])))"
         }
       ]
+    },
+    {
+      "id": 4,
+      "type": "logs",
+      "title": "Recent Error Logs",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "options": {
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{namespace=\"observability\", app=\"$service\"} | json | level=\"ERROR\""
+        }
+      ]
     }
   ]
 }

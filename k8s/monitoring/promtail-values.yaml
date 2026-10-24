@@ -1,0 +1,9 @@
+# Passed to `helm install promtail grafana/promtail`.
+#
+# The chart's default client URL points at "loki-gateway" -- the nginx
+# component we deliberately disabled in loki-values.yaml (SingleBinary mode
+# has nothing to route between). Pointed directly at Loki's own Service
+# instead, confirmed via the `helm install loki` output itself.
+config:
+  clients:
+    - url: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push

@@ -139,6 +139,36 @@
           "expr": "sum by (result) (rate(payment_transactions_total[$__rate_interval]))"
         }
       ]
+    },
+    {
+      "id": 4,
+      "type": "logs",
+      "title": "Recent Error Logs (all services)",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "options": {
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{namespace=\"observability\"} | json | level=\"ERROR\""
+        }
+      ]
     }
   ]
 }

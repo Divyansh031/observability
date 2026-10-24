@@ -1,0 +1,39 @@
+# Passed to `helm install loki grafana/loki`.
+#
+# The chart's default deploymentMode (SimpleScalable) runs separate
+# read/write/backend components and REQUIRES S3-compatible object storage
+# (confirmed via `helm show values` -- the chart's own comment says so
+# explicitly). We have neither a multi-node cluster nor S3 here, so we use
+# SingleBinary mode instead: one Loki process, logs stored on local disk via
+# a PVC. This is a real, chart-documented mode (not a hack) meant for
+# exactly this kind of small/local setup.
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: filesystem
+  # The chart's own shortcut for "testing or playing around" -- avoids
+  # hand-writing a schema_config block ourselves.
+  useTestSchema: true
+
+deploymentMode: SingleBinary
+
+singleBinary:
+  replicas: 1
+
+# SingleBinary mode doesn't use these -- they default to 3 replicas each
+# and would try to start 9 extra pods expecting object storage we don't have.
+read:
+  replicas: 0
+write:
+  replicas: 0
+backend:
+  replicas: 0
+
+# The gateway is an nginx reverse-proxy that routes to the right component
+# in SimpleScalable/Distributed mode. With only one component (SingleBinary),
+# there's nothing to route between, so we skip it and point Promtail
+# straight at Loki's own Service instead.
+gateway:
+  enabled: false
